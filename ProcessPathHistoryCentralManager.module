@@ -1,0 +1,193 @@
+<?php
+
+namespace ProcessWire;
+use \PDO;
+
+/**
+ * ProcessPagePathHistoryManager (0.0.2)
+ * Manager all Page path history links in a single locations.
+ *
+ * @author Nicko Winner
+ *
+ */
+class ProcessPathHistoryCentralManager extends Process
+{
+    const MODULE_PAGE_NAME = 'path-history-central-manager';
+
+    public static function getModuleInfo()
+    {
+        return array(
+            'title'      => 'Process Path History Central Manager',
+            'summary'    => 'Manage fallback paths/page path history in a central location',
+            'version'    =>  0.02,
+            'permission' => 'redirect-manager',
+        );
+    }
+
+    public function init()
+    {
+        parent::init();
+    }
+
+    /**
+     * Page: Main admin table page.
+     * Example: /processwire/setup/path-history-central-manager/ (differs depending on where PW was installed)
+     * Also see : templateTable.
+     * @return string
+     */
+    public function ___execute()
+    {
+        //$this->modules->JqueryDataTables;
+        $this->config->styles->add($this->config->urls->ProcessPathHistoryCentralManager .'DataTable.css');
+        $this->config->scripts->add($this->config->urls->ProcessPathHistoryCentralManager. 'DataTable.js');
+
+        ob_start();
+        //$res is used in the include.
+        $res = $this->db->query("SELECT h.created, h.path, h.pages_id as id, p.path as page_path FROM page_path_history h LEFT JOIN pages_paths p ON h.pages_id = p.pages_id");
+        include($this->config->paths->ProcessPathHistoryCentralManager . 'templateTable.php');
+        $tableMarkup = ob_get_contents();
+        ob_end_clean();
+
+        $form = $this->modules->get("InputfieldForm");
+        $form->method = 'post';
+        $form->action = "new";
+
+        $field = $this->modules->get('InputfieldSubmit');
+        $field->value = 'New Redirect';
+        $form->add($field);
+
+        return $tableMarkup . $form->render();
+    }
+
+    /**
+     * Page: Delete Redirect Rule
+     * @return bool
+     */
+    public function executeDelete()
+    {
+        $id = (int) $this->input->get->id;
+        if (!$id) {
+            $this->error("invalid page id, can not delete it");
+            return false;
+        }
+        $res = $this->db->query("SELECT h.path, p.path as page_path FROM page_path_history h LEFT JOIN pages_paths p ON h.pages_id = p.pages_id WHERE h.pages_id=$id");
+        $row = $res->fetch_assoc();
+        $this->message("Deleted redirect: {$row['path']} To {$row['page_path']}");
+        $this->db->query("DELETE FROM page_path_history  WHERE pages_id=$id");
+        $redirectPageUrl = $this->pages->get('name=' . self::MODULE_PAGE_NAME)->url;
+        $this->session->redirect($redirectPageUrl);
+    }
+
+    /**
+     * Page: Create New Redirect Form
+     * @return string
+     */
+    public function executeNew()
+    {
+        $post = wire('input')->post;
+        $db = $this->wire('database');
+        $from = $post->from;
+        $toId = '';
+
+        if ($post->save) {
+            // single entries start with a ","...looks like a bug to me...
+            $to = wire('pages')->get("id=" . str_replace(',', '', $post->to[0]));
+            $toId = $to->id;
+            $error = false;
+
+            if (!$toId) {
+                $this->error('Page to redirect to is required');
+                $error = true;
+            }
+            if (!$from || !$this->sanitizer->path($from,['allowDotDot'=>true])) {
+                $this->error('valid URL to redirect from is required');
+                $error = true;
+            }
+            //check if paths it already exists and throw a meaningful message
+            $query = $db->prepare("SELECT path page_path FROM page_path_history WHERE path=:path");
+            $query->bindValue(":path", $from);
+            $query->execute();
+            if ($query->rowCount()) {
+                $this->error("There is already a redirect for: {$from}");
+                $error = true;
+            }
+
+            if ($error) {
+                $this->session->redirect('./new');
+            }
+
+            $query = $db->prepare("INSERT INTO page_path_history SET path=:path, pages_id=:pages_id, created=NOW()");
+            $query->bindValue(":pages_id", $to->id, PDO::PARAM_INT);
+            $query->bindValue(":path", $from);
+            $query->execute();
+            if (0 < $query->rowCount()) {
+                $this->message("Redirect Create: {$from} to {$to->path}");
+            } else {
+                $this->error('Something went wrong, could not create redirect');
+            }
+            $query->closeCursor();
+
+            $this->session->redirect('./');
+        }
+
+        $form = $this->modules->get("InputfieldForm");
+        $form->method = 'post';
+        $form->action = './new';
+
+        $field = $this->modules->get('InputfieldText');
+        $field->labelFieldName = 'path';
+        $field->label = 'Redirect from URL';
+        $field->name = 'from';
+        $field->value = $from;
+        $field->description = "Example: /about/our-people/some-page/";
+        $field->columnWidth = 100;
+        $field->required = true;
+        $form->add($field);
+
+        $field = $this->modules->get('InputfieldPageAutocomplete');
+        $field->labelFieldName = 'path';
+        $field->searchFields = 'path';
+        $field->label = 'Redirect To Page';
+        $field->name = 'to';
+        $field->value = [$toId];
+        $field->columnWidth = 100;
+        $field->required = true;
+        $field->maxSelectedItems = 1;
+        $field->findPagesSelector = 'has_parent!=/trash/,has_parent!=/drafts/,has_parent!=/processwire/';
+        $form->add($field);
+
+        $field = $this->modules->get('InputfieldSubmit');
+        $field->value = 'Save';
+        $field->name = 'save';
+        $form->add($field);
+
+        $style = "<style>.InputfieldPageAutocomplete input[type=text]{width:100%}</style>";
+        return $form->render() . $style;
+    }
+
+    public function ___install()
+    {
+        $newrole = new Role();
+        $newrole->name= 'redirect-manager';
+        $permission = $this->permissions->add('redirect-manager');
+        $permission->title = 'Create and remove redirects';
+        $permission->save();
+
+        $p = new Page();
+        $p->template = $this->templates->get("admin");
+        $p->parent = $this->pages->get('name=setup');
+        $p->title = 'Redirect Path History Manager';
+        $p->name = self::MODULE_PAGE_NAME;
+        $p->process = $this;
+        $p->save();
+    }
+
+    public function ___uninstall()
+    {
+        $this->permissions->delete( $this->permissions->get('redirect-manager'));
+        $p = $this->pages->get('template=admin, name=' . self::MODULE_PAGE_NAME);
+        $p->delete();
+    }
+}
+
+
