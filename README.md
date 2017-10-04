@@ -11,7 +11,7 @@ Manager for the processwrie PagePathHistory module, that creates redirects autom
 **Viewing all existing redirects:**
 ![Alt text](assets/demo.png?raw=true)
 
-**Adding Content:**
+**Adding Redirect:**
 ![Alt text](assets/demo-add.png?raw=true)
 
 **Tested on:**
@@ -21,7 +21,7 @@ Processwire 2.6, 3.0
 ## Install
 
 1. Install the module [PagePathHistory]() from within the Processwire admin. [PagePathHistory]() is included in core but not installed by default.
-2. Install the module ProcessPathHistoryCentralManager by cloning this repo into site/modules/ in your processwire install.
+2. Install the module [ProcessPathHistoryCentralManager](https://github.com/hagcin/ProcessPathHistoryCentralManager) by cloning this repo into site/modules/ in your processwire install.
 3. Install the module in the admin interface.
 4. You can now manage urls under setup > page path history redirect manager
 
