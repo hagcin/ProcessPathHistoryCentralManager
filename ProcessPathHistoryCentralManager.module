@@ -19,8 +19,9 @@ class ProcessPathHistoryCentralManager extends Process
         return array(
             'title'      => 'Process Path History Central Manager',
             'summary'    => 'Manage fallback paths/page path history in a central location',
-            'version'    =>  0.02,
+            'version'    =>  0.03,
             'permission' => 'redirect-manager',
+            'requires'   => 'PagePathHistory'
         );
     }
 
@@ -43,7 +44,7 @@ class ProcessPathHistoryCentralManager extends Process
 
         ob_start();
         //$res is used in the include.
-        $res = $this->db->query("SELECT h.created, h.path, h.pages_id as id, p.path as page_path FROM page_path_history h LEFT JOIN pages_paths p ON h.pages_id = p.pages_id");
+        $res = $this->db->query("SELECT h.created, h.path, p.path AS page_path, h.pages_id as id FROM page_path_history h LEFT JOIN pages_paths p ON h.pages_id = p.pages_id");
         include($this->config->paths->ProcessPathHistoryCentralManager . 'templateTable.php');
         $tableMarkup = ob_get_contents();
         ob_end_clean();
@@ -84,7 +85,7 @@ class ProcessPathHistoryCentralManager extends Process
      */
     public function executeNew()
     {
-        $post = wire('input')->post;
+        $post = $this->input->post;
         $db = $this->wire('database');
         $from = $post->from;
         $toId = '';
@@ -99,18 +100,20 @@ class ProcessPathHistoryCentralManager extends Process
                 $this->error('Page to redirect to is required');
                 $error = true;
             }
+            
             if (!$from || !$this->sanitizer->path($from,['allowDotDot'=>true])) {
                 $this->error('valid URL to redirect from is required');
                 $error = true;
             }
+
             //check if paths it already exists and throw a meaningful message
             $query = $db->prepare("SELECT path page_path FROM page_path_history WHERE path=:path");
-            $query->bindValue(":path", $from);
+            $query->bindValue(":path", $from); 
             $query->execute();
             if ($query->rowCount()) {
                 $this->error("There is already a redirect for: {$from}");
                 $error = true;
-            }
+            } 
 
             if ($error) {
                 $this->session->redirect('./new');
@@ -118,6 +121,7 @@ class ProcessPathHistoryCentralManager extends Process
 
             $query = $db->prepare("INSERT INTO page_path_history SET path=:path, pages_id=:pages_id, created=NOW()");
             $query->bindValue(":pages_id", $to->id, PDO::PARAM_INT);
+            $from = rtrim($from, '/'); // remove trailing slash because that is how PagePathHistory likes to store paths.
             $query->bindValue(":path", $from);
             $query->execute();
             if (0 < $query->rowCount()) {
@@ -139,7 +143,7 @@ class ProcessPathHistoryCentralManager extends Process
         $field->label = 'Redirect from URL';
         $field->name = 'from';
         $field->value = $from;
-        $field->description = "Example: /about/our-people/some-page/";
+        $field->description = "Example: /about/our-people/some-page";
         $field->columnWidth = 100;
         $field->required = true;
         $form->add($field);
