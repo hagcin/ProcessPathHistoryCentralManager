@@ -4,8 +4,10 @@ namespace ProcessWire;
 
 /**
  * Table Template for : ProcessPathHistoryCentralManager
+ * @var PDO $redirectsQueryResult
  */
-while ($row = $res->fetch_assoc()) {
+$tBody = '';
+while ($row = $redirectsQueryResult->fetch_assoc()) {
     $created = date('m/d/y',strtotime($row['created']));
     $tBody .= "<TR>";
     $tBody .= "<td>{$row['path']}</td>";
