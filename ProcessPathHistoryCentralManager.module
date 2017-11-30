@@ -21,6 +21,8 @@ class ProcessPathHistoryCentralManager extends Process
             'summary'    => 'Manage fallback paths/page path history in a central location',
             'version'    =>  0.03,
             'permission' => 'redirect-manager',
+            'autoload'  => 'template=admin',
+            'singular'  => true,
             'requires'   => 'PagePathHistory'
         );
     }
