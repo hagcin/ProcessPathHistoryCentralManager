@@ -21,6 +21,9 @@ class ProcessPathHistoryCentralManager extends Process
             'summary'    => 'Manage fallback paths/page path history in a central location',
             'version'    =>  0.03,
             'permission' => 'redirect-manager',
+            'autoload'   => false,
+            'href'       => 'https://processwire.com/talk/topic/17357-module-page-path-history-central-manager/',
+            'singular'   => true,
             'requires'   => 'PagePathHistory'
         );
     }
